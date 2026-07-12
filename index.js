@@ -1,7 +1,6 @@
 const http = require('http');
 const bridge = require('minimed-connect-to-nightscout');
 
-// 1. Поднимаем обязательный веб-сервер для Render
 const port = process.env.PORT || 10000;
 http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
@@ -10,46 +9,53 @@ http.createServer((req, res) => {
   console.log(`[Веб-сервер] Активен на порту ${port}`);
 });
 
-// Синхронизируем секретные ключи
 if (process.env.NIGHTSCOUT_API_SECRET && !process.env.API_SECRET) {
   process.env.API_SECRET = process.env.NIGHTSCOUT_API_SECRET;
 }
 
-console.log("[Мост] Ручная сборка конвейера CareLink -> Nightscout запущена.");
+console.log("[Мост] Поиск скрытых функций внутри модулей...");
 
-// 2. Главная функция опроса
+// Определяем правильные функции для CareLink и Nightscout
+const fetchCarelink = typeof bridge.carelink === 'function' ? bridge.carelink : (bridge.carelink.fetch || bridge.carelink.getHistory || Object.values(bridge.carelink).find(f => typeof f === 'function'));
+const uploadNightscout = typeof bridge.nightscout === 'function' ? bridge.nightscout : (bridge.nightscout.upload || bridge.nightscout.send || Object.values(bridge.nightscout).find(f => typeof f === 'function'));
+
+console.log("[Диагностика] Carelink метод:", typeof fetchCarelink);
+console.log("[Диагностика] Nightscout метод:", typeof uploadNightscout);
+
 async function syncData() {
-  console.log(`[${new Date().toISOString()}] ==> Начало синхронизации данных...`);
+  console.log(`[${new Date().toISOString()}] ==> Старт ручной синхронизации...`);
   try {
-    // Шаг А: Скачиваем последние данные из Medtronic CareLink
-    console.log("[Мост] Запрос данных из CareLink...");
-    const rawData = await bridge.carelink();
+    if (!fetchCarelink || !uploadNightscout) {
+      throw new Error(`Не удалось определить функции. Доступно в carelink: ${Object.keys(bridge.carelink)}, в nightscout: ${Object.keys(bridge.nightscout)}`);
+    }
+
+    console.log("[Мост] Шаг 1: Запрос к CareLink...");
+    // Вызываем функцию с контекстом самого модуля, на случай если ей нужен внутренний `this`
+    const rawData = await fetchCarelink.call(bridge.carelink);
     
     if (!rawData) {
-      console.log("[Мост] Сервер CareLink вернул пустые данные или сахара не изменились.");
+      console.log("[Мост] CareLink вернул пустой ответ.");
       return;
     }
 
-    // Шаг Б: Трансформируем данные в формат Nightscout
-    console.log("[Мост] Трансформация данных...");
+    console.log("[Мост] Шаг 2: Трансформация...");
     const transformedData = bridge.transform(rawData);
+    const filteredData = bridge.filter ? bridge.filter(transformedData) : transformedData;
 
-    // Шаг В: Фильтруем дубликаты
-    const filteredData = bridge.filter(transformedData);
-
-    // Шаг Г: Отправляем в ваш Nightscout
-    console.log("[Мост] Отправка данных в Nightscout...");
-    await bridge.nightscout(filteredData);
+    console.log("[Мост] Шаг 3: Отправка в Nightscout...");
+    await uploadNightscout.call(bridge.nightscout, filteredData);
     
-    console.log("[Успех 🎉] Новые сахара успешно загружены в Nightscout!");
+    console.log("[Успех 🎉] Данные сахара доставлены в Nightscout!");
 
   } catch (error) {
-    console.error("[Ошибка конвейера]:", error.message || error);
+    console.error("[Ошибка выполнения конвейера]:", error.message || error);
   }
 }
 
-// Запускаем опрос сразу при старте
-syncData();
-
-// Повторяем процедуру каждые 5 минут (300 000 мс)
-setInterval(syncData, 300000);
+// Запуск
+if (fetchCarelink && uploadNightscout) {
+  syncData();
+  setInterval(syncData, 300000);
+} else {
+  console.log("[Критическая ошибка] Структура методов не распознана. Ключи carelink:", Object.keys(bridge.carelink));
+}
