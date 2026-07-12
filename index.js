@@ -1,12 +1,10 @@
 const http = require('http');
 const { fork } = require('child_process');
 
-// 1. Привязка секретного ключа Nightscout
 if (process.env.NIGHTSCOUT_API_SECRET && !process.env.API_SECRET) {
   process.env.API_SECRET = process.env.NIGHTSCOUT_API_SECRET;
 }
 
-// 2. Веб-сервер для Render (чтобы сервис оставался "Live")
 const port = process.env.PORT || 10000;
 const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
@@ -14,30 +12,24 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(port, '0.0.0.0', () => {
-  console.log(`[Веб-сервер] Успешно запущен на порту ${port}`);
+  console.log(`[Веб-сервер] Запущен на порту ${port}`);
 });
 
-// 3. Запуск библиотеки в отдельном процессе с автоматическим определением пути
 try {
-  console.log("[Мост] Попытка автоматического поиска и запуска Medtronic...");
+  console.log("[Мост] Запуск Medtronic с прямым выводом логов...");
   
-  // Node.js сам найдет точный путь к главному исполняемому файлу библиотеки
   const targetScript = require.resolve('minimed-connect-to-nightscout');
-  console.log(`[Мост] Найден целевой скрипт: ${targetScript}`);
   
-  // Запускаем процесс, как самостоятельное CLI-приложение
+  // Магия здесь: stdio: 'inherit' заставит библиотеку писать логи прямо в Render
   const child = fork(targetScript, [], {
+    stdio: 'inherit',
     env: {
       ...process.env,
-      DEBUG: '*' // На всякий случай включаем полный вывод логов внутри процесса
+      DEBUG: '*'
     }
   });
 
-  child.on('error', (err) => {
-    console.error('[Ошибка дочернего процесса]:', err.message);
-  });
-
-  console.log("[Мост] Процесс библиотеки успешно изолирован и запущен.");
+  console.log("[Мост] Процесс успешно изолирован.");
 } catch (error) {
-  console.error("[Критическая ошибка запуска]:", error.message);
+  console.error("[Критическая ошибка]:", error.message);
 }
