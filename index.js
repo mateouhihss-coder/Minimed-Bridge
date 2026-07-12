@@ -1,5 +1,10 @@
 const http = require('http');
 
+// Перенаправляем вашу переменную в стандартную для библиотеки
+if (process.env.NIGHTSCOUT_API_SECRET && !process.env.API_SECRET) {
+  process.env.API_SECRET = process.env.NIGHTSCOUT_API_SECRET;
+}
+
 // Сервер для Render
 const port = process.env.PORT || 10000;
 const server = http.createServer((req, res) => {
@@ -11,21 +16,11 @@ server.listen(port, '0.0.0.0', () => {
   console.log(`[Веб-сервер] Слушает порт ${port}`);
 });
 
-// Запуск загрузчика Medtronic с явным вызовом основного метода
+// Запуск загрузчика Medtronic
 try {
   console.log("Инициализация загрузчика Medtronic...");
-  const bridge = require('minimed-connect-to-nightscout');
-  
-  // Если библиотека экспортирует функцию запуска напрямую, вызываем её
-  if (typeof bridge === 'function') {
-    bridge();
-    console.log("Основная функция загрузчика успешно вызвана.");
-  } else if (bridge && typeof bridge.start === 'function') {
-    bridge.start();
-    console.log("Метод .start() загрузчика успешно вызван.");
-  } else {
-    console.log("Библиотека импортирована, ожидаем автоматический цикл...");
-  }
+  require('minimed-connect-to-nightscout');
+  console.log("Загрузчик успешно импортирован.");
 } catch (error) {
   console.error("КРИТИЧЕСКАЯ ОШИБКА ПРИ ЗАПУСКЕ:");
   console.error(error.message);
