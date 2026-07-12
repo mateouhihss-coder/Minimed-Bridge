@@ -1,29 +1,32 @@
 const http = require('http');
 
-// Держим порт для Render, чтобы сервис не падал
 const port = process.env.PORT || 10000;
 const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
   res.end('OK');
 });
-server.listen(port, '0.0.0.0', () => {
-  console.log(`[Веб-сервер] Активен на порту ${port}`);
-});
+server.listen(port, '0.0.0.0');
 
-// Синхронизируем секреты
-if (process.env.NIGHTSCOUT_API_SECRET && !process.env.API_SECRET) {
-  process.env.API_SECRET = process.env.NIGHTSCOUT_API_SECRET;
-}
+// Принудительно выводим все логи в консоль
+process.stdout.write = process.stderr.write = console.log.bind(console);
 
-console.log("[Мост] Запуск библиотеки напрямую для перехвата внутренних ошибок...");
+console.log("[DEBUG] Запуск инициализации...");
 
 try {
-  // Прямой запуск кода библиотеки в основном потоке
-  require('minimed-connect-to-nightscout/index.js');
-  console.log("[Мост] Библиотека успешно инициализирована.");
+  // Загружаем настройки и библиотеку
+  const bridge = require('minimed-connect-to-nightscout');
+  console.log("[DEBUG] Библиотека загружена.");
+
+  // Попробуем запустить процесс с явным выводом всех событий
+  console.log("[DEBUG] Попытка старта цикла опроса...");
+  // Многие версии этой библиотеки требуют вызова функции start()
+  if (typeof bridge.start === 'function') {
+      bridge.start();
+      console.log("[DEBUG] Функция start() вызвана.");
+  } else {
+      console.log("[DEBUG] Библиотека запущена в автоматическом режиме.");
+  }
+
 } catch (error) {
-  console.error("==========================================");
-  console.error("[КРАШ БИБЛИОТЕКИ] Поймано скрытое исключение:");
-  console.error(error.stack || error.message || error);
-  console.error("==========================================");
+  console.error("[КРИТИЧЕСКАЯ ОШИБКА]:", error);
 }
