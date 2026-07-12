@@ -1,6 +1,7 @@
 const http = require('http');
+const fs = require('fs');
+const path = require('path');
 
-// Запуск веб-сервера для Render
 const port = process.env.PORT || 10000;
 http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
@@ -9,47 +10,25 @@ http.createServer((req, res) => {
   console.log(`[Веб-сервер] Активен на порту ${port}`);
 });
 
-if (process.env.NIGHTSCOUT_API_SECRET && !process.env.API_SECRET) {
-  process.env.API_SECRET = process.env.NIGHTSCOUT_API_SECRET;
-}
-
-console.log("[Мост] Перевод библиотеки на ручное принудительное управление...");
+console.log("[Мост] Сканирование внутренностей библиотеки...");
 
 try {
-  // Загружаем внутренний модуль опроса самой библиотеки
-  // В большинстве форков minimed-connect-to-nightscout логика лежит в файле или методе cgm
-  const cgm = require('minimed-connect-to-nightscout/cgm');
+  // Находим, где физически лежит главный файл библиотеки
+  const mainPath = require.resolve('minimed-connect-to-nightscout');
+  console.log(`[Мост] Путь к библиотеке: ${mainPath}`);
   
-  if (typeof cgm === 'function') {
-    console.log("[Мост] Модуль cgm успешно перехвачен. Запускаем ручной таймер...");
-    
-    // Функция принудительного опроса
-    async function runPoll() {
-      console.log(`[${new Date().toISOString()}] ==> Принудительный опрос CareLink...`);
-      try {
-        await cgm();
-        console.log("[Мост] Запрос к CareLink выполнен.");
-      } catch (err) {
-        console.error("[Мост] Ошибка внутри выполнения cgm:", err.message || err);
-      }
-    }
+  const bridge = require(mainPath);
+  
+  // Выводим все доступные ключи и методы объекта библиотеки
+  console.log("[Мост] Доступные методы в коде:", Object.keys(bridge));
+  console.log("[Мост] Тип экспорта:", typeof bridge);
 
-    // Запускаем первый раз прямо сейчас
-    runPoll();
+  // Читаем первые 50 строк исходного кода, чтобы увидеть, что она делает при старте
+  const sourceCode = fs.readFileSync(mainPath, 'utf8');
+  console.log("=== НАЧАЛО ИСХОДНОГО КОДА ===");
+  console.log(sourceCode.split('\n').slice(0, 60).join('\n'));
+  console.log("=== КОНЕЦ ИСХОДНОГО КОДА ===");
 
-    // Повторяем каждые 5 минут (300 000 миллисекунд)
-    setInterval(runPoll, 300000);
-
-  } else {
-    console.log("[Внимание] Модуль cgm не является функцией. Пробуем альтернативный запуск...");
-    require('minimed-connect-to-nightscout');
-  }
 } catch (error) {
-  console.log("[Инфо] Прямой cgm не найден, пробуем стандартный запуск с логированием ошибок ядра...");
-  try {
-    const bridge = require('minimed-connect-to-nightscout');
-    if (typeof bridge.init === 'function') bridge.init();
-  } catch (e) {
-    console.error("[Критическая ошибка]:", e.message);
-  }
+  console.error("[Ошибка сканирования]:", error.message);
 }
