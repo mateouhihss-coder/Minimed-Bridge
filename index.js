@@ -1,59 +1,44 @@
 const http = require('http');
+const { fork } = require('child_process');
+const path = require('path');
 
 // 1. Привязка секретного ключа Nightscout
 if (process.env.NIGHTSCOUT_API_SECRET && !process.env.API_SECRET) {
   process.env.API_SECRET = process.env.NIGHTSCOUT_API_SECRET;
 }
 
-// 2. Инициализация библиотеки моста
-let bridge;
-try {
-  bridge = require('minimed-connect-to-nightscout');
-  console.log("[Мост] Библиотека Medtronic успешно загружена в память.");
-} catch (e) {
-  console.error("[Критическая ошибка] Не удалось загрузить библиотеку:", e.message);
-}
-
-// 3. Функция принудительного запуска опроса CareLink
-function runSync() {
-  console.log(`[${new Date().toLocaleTimeString()}] -> Запуск принудительного цикла синхронизации сахаров...`);
-  
-  try {
-    // В зависимости от версии форка библиотеки, запускаем доступный метод
-    if (typeof bridge === 'function') {
-      bridge();
-    } else if (bridge && typeof bridge.start === 'function') {
-      bridge.start();
-    } else if (bridge && typeof bridge.init === 'function') {
-      bridge.init();
-    } else {
-      console.log("[Предупреждение] У библиотеки нет явного метода запуска. Проверьте переменные окружения.");
-    }
-  } catch (err) {
-    console.error("[Ошибка цикла]:", err.message);
-  }
-}
-
-// Запускаем опрос сразу при старте и затем каждые 5 минут (300 000 мс)
-if (bridge) {
-  setTimeout(runSync, 5000); // первый запуск через 5 секунд после старта сервера
-  setInterval(runSync, 300000);
-}
-
-// 4. Веб-сервер для удержания Render в сети
+// 2. Веб-сервер для Render (чтобы сервис был "Live")
 const port = process.env.PORT || 10000;
 const server = http.createServer((req, res) => {
-  // При обращении к сайту моста можно принудительно пнуть синхронизацию
-  if (req.url === '/sync') {
-    runSync();
-    res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
-    return res.end('Синхронизация запущена вручную!');
-  }
-  
   res.writeHead(200, { 'Content-Type': 'text/plain' });
   res.end('OK');
 });
 
 server.listen(port, '0.0.0.0', () => {
-  console.log(`[Веб-сервер] Слушает порт ${port}. Для ручного пинка используйте /sync`);
+  console.log(`[Веб-сервер] Успешно запущен на порту ${port}`);
 });
+
+// 3. Запуск библиотеки в отдельном изолированном процессе (как в терминале)
+try {
+  console.log("[Мост] Попытка прямого запуска библиотеки Medtronic...");
+  
+  // Находим путь к исполняемому файлу библиотеки
+  const binPath = path.join(__dirname, 'node_modules', 'minimed-connect-to-nightscout', 'bin', 'minimed-connect-to-nightscout.js');
+  
+  // Запускаем дочерний процесс
+  const child = fork(binPath, [], {
+    env: process.env // Пробрасываем все наши переменные окружения
+  });
+
+  child.on('message', (msg) => {
+    console.log('[Библиотека]:', msg);
+  });
+
+  child.on('error', (err) => {
+    console.error('[Ошибка библиотеки]:', err.message);
+  });
+
+  console.log("[Мост] Процесс библиотеки успешно изолирован и запущен.");
+} catch (error) {
+  console.error("[Критическая ошибка запуска]:", error.message);
+}
