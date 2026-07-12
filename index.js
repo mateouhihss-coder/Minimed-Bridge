@@ -1,38 +1,55 @@
 const http = require('http');
 
-// 1. Включаем отладочные логи для всех модулей ДО загрузки библиотеки
-process.env.DEBUG = '*';
-
+// Запуск веб-сервера для Render
 const port = process.env.PORT || 10000;
-const server = http.createServer((req, res) => {
+http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
   res.end('OK');
+}).listen(port, '0.0.0.0', () => {
+  console.log(`[Веб-сервер] Активен на порту ${port}`);
 });
 
-server.listen(port, '0.0.0.0', () => {
-  console.log(`[Веб-сервер] Успешно запущен на порту ${port}`);
-});
-
-// Синхронизация секретов для Nightscout
 if (process.env.NIGHTSCOUT_API_SECRET && !process.env.API_SECRET) {
   process.env.API_SECRET = process.env.NIGHTSCOUT_API_SECRET;
 }
 
-console.log("[Мост] Запуск с включенным режимом подробного вывода логов...");
+console.log("[Мост] Перевод библиотеки на ручное принудительное управление...");
 
 try {
-  const bridge = require('minimed-connect-to-nightscout');
+  // Загружаем внутренний модуль опроса самой библиотеки
+  // В большинстве форков minimed-connect-to-nightscout логика лежит в файле или методе cgm
+  const cgm = require('minimed-connect-to-nightscout/cgm');
   
-  // Проверяем, как именно библиотека хочет быть запущенной
-  if (typeof bridge === 'function') {
-    console.log("[Мост] Обнаружен функциональный экспорт. Запуск...");
-    bridge();
-  } else if (bridge && typeof bridge.start === 'function') {
-    console.log("[Мост] Обнаружен метод start(). Запуск...");
-    bridge.start();
+  if (typeof cgm === 'function') {
+    console.log("[Мост] Модуль cgm успешно перехвачен. Запускаем ручной таймер...");
+    
+    // Функция принудительного опроса
+    async function runPoll() {
+      console.log(`[${new Date().toISOString()}] ==> Принудительный опрос CareLink...`);
+      try {
+        await cgm();
+        console.log("[Мост] Запрос к CareLink выполнен.");
+      } catch (err) {
+        console.error("[Мост] Ошибка внутри выполнения cgm:", err.message || err);
+      }
+    }
+
+    // Запускаем первый раз прямо сейчас
+    runPoll();
+
+    // Повторяем каждые 5 минут (300 000 миллисекунд)
+    setInterval(runPoll, 300000);
+
   } else {
-    console.log("[Мост] Библиотека загружена и должна работать автоматически.");
+    console.log("[Внимание] Модуль cgm не является функцией. Пробуем альтернативный запуск...");
+    require('minimed-connect-to-nightscout');
   }
 } catch (error) {
-  console.error("[Ошибка инициализации]:", error.message);
+  console.log("[Инфо] Прямой cgm не найден, пробуем стандартный запуск с логированием ошибок ядра...");
+  try {
+    const bridge = require('minimed-connect-to-nightscout');
+    if (typeof bridge.init === 'function') bridge.init();
+  } catch (e) {
+    console.error("[Критическая ошибка]:", e.message);
+  }
 }
