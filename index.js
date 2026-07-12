@@ -1,18 +1,17 @@
 const http = require('http');
 
-// Создаем пустой веб-сервер для Render, чтобы он не гасил приложение
-const port = process.env.PORT || 3000;
+// Создаем сервер, который намертво глушит любые проверки от Render ответом "всё ок"
+const port = process.env.PORT || 10000;
 const server = http.createServer((req, res) => {
-  res.statusCode = 200;
-  res.setHeader('Content-Type', 'text/plain');
-  res.end('Medtronic Bridge is running...\n');
+  res.writeHead(200, { 'Content-Type': 'text/plain' });
+  res.end('OK');
 });
 
-server.listen(port, () => {
-  console.log(`[Веб-сервер] Запущен на порту ${port}`);
+server.listen(port, '0.0.0.0', () => {
+  console.log(`[Веб-сервер] Слушает порт ${port} на всех интерфейсах`);
 });
 
-// Запуск самого загрузчика Medtronic
+// Запуск загрузчика Medtronic
 try {
   console.log("Инициализация загрузчика Medtronic...");
   require('minimed-connect-to-nightscout');
