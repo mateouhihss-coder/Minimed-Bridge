@@ -16,20 +16,25 @@ server.listen(port, '0.0.0.0', () => {
 });
 
 try {
-  console.log("[Мост] Запуск Medtronic с прямым выводом логов...");
+  console.log("[Мост] Попытка контролируемого запуска библиотеки...");
   
   const targetScript = require.resolve('minimed-connect-to-nightscout');
   
-  // Магия здесь: stdio: 'inherit' заставит библиотеку писать логи прямо в Render
   const child = fork(targetScript, [], {
-    stdio: 'inherit',
+    stdio: ['inherit', 'inherit', 'inherit', 'ipc'], // Перехватываем вообще все потоки вывода
     env: {
       ...process.env,
-      DEBUG: '*'
+      DEBUG: '*' // Форсируем вывод отладки для всех модулей
     }
   });
 
-  console.log("[Мост] Процесс успешно изолирован.");
+  // Отслеживаем неожиданное закрытие процесса
+  child.on('exit', (code, signal) => {
+    console.error(`[Внимание] Процесс библиотеки завершился сам! Код выхода: ${code}, Сигнал: ${signal}`);
+    console.error("Это означает, что библиотека проверила переменные окружения и принудительно закрылась. Проверьте правильность логина/пароля/ссылки.");
+  });
+
+  console.log("[Мост] Контроль над процессом установлен.");
 } catch (error) {
   console.error("[Критическая ошибка]:", error.message);
 }
