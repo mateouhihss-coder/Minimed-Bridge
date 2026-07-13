@@ -1,33 +1,25 @@
-const axios = require('axios');
+const https = require('https');
 
-// Шпион для глобального axios
-axios.interceptors.request.use(req => {
-    console.log(`[HTTP ЗАПРОС] ${req.method.toUpperCase()} ${req.baseURL || ''}${req.url || ''}`);
-    return req;
-});
-axios.interceptors.response.use(res => res, err => {
-    if (err.config) {
-        console.error(`[HTTP ОШИБКА ${err.response?.status}] на URL: ${err.config.baseURL || ''}${err.config.url || ''}`);
-    }
-    return Promise.reject(err);
-});
-
-// Шпион для изолированных инстансов axios.create()
-const originalCreate = axios.create;
-axios.create = function(config) {
-    const instance = originalCreate.call(this, config);
-    instance.interceptors.request.use(req => {
-        console.log(`[HTTP ЗАПРОС (create)] ${req.method.toUpperCase()} ${req.baseURL || ''}${req.url || ''}`);
-        return req;
-    });
-    instance.interceptors.response.use(res => res, err => {
-        if (err.config) {
-            console.error(`[HTTP ОШИБКА ${err.response?.status} (create)] на URL: ${err.config.baseURL || ''}${err.config.url || ''}`);
+// Глубокий перехват всех HTTPS-запросов на уровне ядра Node.js
+const originalRequest = https.request;
+https.request = function(options, ...args) {
+    const host = options.host || options.hostname || '';
+    const path = options.path || '';
+    
+    console.log(`[ШПИОН ЯДРА] Попытка запроса: https://${host}${path}`);
+    
+    const req = originalRequest.call(this, options, ...args);
+    
+    req.on('response', (res) => {
+        if (res.statusCode === 404) {
+            console.error(`[ШПИОН ЯДРА - НАЙДЕНА 404] Точный URL: https://${host}${path}`);
         }
-        return Promise.reject(err);
     });
-    return instance;
+    
+    return req;
 };
+
+// ... далее ваш обычный код (const carelink = require(...) и т.д.)
 
 // Перехватываем все вызовы axios глобально
 axios.interceptors.request.use((config) => {
