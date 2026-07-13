@@ -7,6 +7,6 @@
     "start": "node server.js"
   },
   "dependencies": {
-    "minimed-connect-to-nightscout": "^4.1.2"
+    "minimed-connect-to-nightscout": "^1.5.8"
   }
 }
