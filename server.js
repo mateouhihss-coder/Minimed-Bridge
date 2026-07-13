@@ -19,51 +19,46 @@ console.log('Запуск моста MiniMed -> Nightscout...');
 console.log('Регион CareLink:', config.server);
 console.log('Целевой Nightscout:', nsUrl);
 
-// Инициализируем клиент CareLink
-const carelinkClient = new minimed.carelink.Client(config);
+// Создаем прямое подключение к CareLink
+const client = new minimed.carelink.Client(config);
 
-function syncData() {
-  console.log(`[${new Date().toISOString()}] Запрос данных из CareLink...`);
+async function syncData() {
+  console.log(`[${new Date().toISOString()}] Делаем запрос в CareLink...`);
   
-  // Передаем callback-функцию (err, data) как требует библиотека версии 1.5.8
-  carelinkClient.fetch(async (err, data) => {
-    if (err) {
-      console.error('Ошибка при запросе из CareLink:', err.message || err);
+  try {
+    // Пробуем получить историю данных напрямую через встроенный метод клиента
+    const data = await client.getHistory(); 
+    
+    if (!data) {
+      console.log('CareLink вернул пустой ответ (нет данных).');
       return;
     }
 
-    try {
-      if (!data || !data.sgs || data.sgs.length === 0) {
-        console.log('Новых сахаров в CareLink не обнаружено.');
-        return;
-      }
+    console.log('Данные из CareLink успешно получены! Отправляем в Nightscout...');
 
-      console.log(`Получено сахаров: ${data.sgs.length}. Отправка в Nightscout...`);
+    // Превращаем данные помпы в формат для сайта Nightscout
+    const entries = minimed.transform(data);
 
-      // Форматируем данные через трансформер
-      const entries = minimed.transform(data);
+    // Загружаем сахара на сайт
+    await minimed.nightscout.upload(nsUrl, nsSecret, entries);
+    console.log('Ура! Данные успешно доставлены на ваш Nightscout!');
 
-      // Отправляем данные на ваш сайт Nightscout
-      await minimed.nightscout.upload(nsUrl, nsSecret, entries);
-      console.log('Данные успешно доставлены в Nightscout!');
-
-    } catch (error) {
-      console.error('Ошибка при обработке или отправке данных:', error.message);
-    }
-  });
+  } catch (error) {
+    console.error('Произошла ошибка при обмене данными:', error.message || error);
+  }
 }
 
-// Запускаем первый опрос и ставим таймер на каждые 5 минут
+// Запускаем проверку сразу при старте, а потом каждые 5 минут
 syncData();
 setInterval(syncData, 5 * 60 * 1000);
 
-// Веб-сервер для стабильности Render
+// Хитрый веб-сервер, чтобы Render не ругался на порты и не отключал нас
 const port = process.env.PORT || 10000;
 const server = http.createServer((req, res) => {
-  res.writeHead(200, { 'Content-Type': 'text/plain' });
-  res.end('Minimed Bridge is running ok!\n');
+  res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+  res.end('Мост MiniMed работает в штатном режиме!\n');
 });
 
 server.listen(port, () => {
-  console.log(`Сервер моста успешно запущен и слушает порт ${port}`);
+  console.log(`Технический веб-сервер запущен на порту ${port}`);
 });
