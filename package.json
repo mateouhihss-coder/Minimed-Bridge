@@ -1,7 +1,10 @@
 {
-  "name": "minimed-connect-to-nightscout",
+  "name": "minimed-bridge",
   "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
   "dependencies": {
-    "minimed-connect-to-nightscout": "latest"
+    "axios": "^0.27.2",
+    "minimed-connect-to-nightscout": "latest" 
   }
 }
