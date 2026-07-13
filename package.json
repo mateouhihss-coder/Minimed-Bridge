@@ -1,13 +1,12 @@
 {
   "name": "minimed-bridge",
   "version": "1.0.0",
-  "description": "CareLink to Nightscout Bridge",
-  "main": "index.js",
+  "description": "Bridge between CareLink and Nightscout",
+  "main": "server.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node server.js"
   },
   "dependencies": {
-    "express": "^4.19.2",
-    "minimed-connect": "^1.1.0"
+    "minimed-connect-to-nightscout": "^4.1.2"
   }
 }
