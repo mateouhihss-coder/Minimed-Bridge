@@ -21,12 +21,7 @@ https.request = function(options, ...args) {
 
 // ... далее ваш обычный код (const carelink = require(...) и т.д.)
 
-// Перехватываем все вызовы axios глобально
-axios.interceptors.request.use((config) => {
-  if (config.url) config.url = patchUrl(config.url);
-  if (config.baseURL) config.baseURL = patchUrl(config.baseURL);
-  return config;
-}, (error) => Promise.reject(error));
+//
 
 const http = require('http');
 const bridge = require('minimed-connect-to-nightscout');
