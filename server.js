@@ -1,6 +1,5 @@
-const bridge = require('minimed-connect-to-nightscout');
+const MinimedBridge = require('minimed-connect-to-nightscout');
 
-// Пробуем все возможные варианты имени переменной для адреса Nightscout
 const nsUrl = process.env.NS_URL || 
               process.env.NIGHTSCOUT_URL || 
               process.env.NIGHTSCOUT_HOST || 
@@ -26,11 +25,10 @@ console.log('Запуск моста MiniMed -> Nightscout...');
 console.log('Регион CareLink:', config.carelink.server);
 console.log('Целевой Nightscout:', config.nightscout.url);
 
-// Запуск библиотеки
-if (typeof bridge === 'function') {
-  bridge(config);
-} else if (bridge && typeof bridge.start === 'function') {
-  bridge.start(config);
-} else {
-  console.error('Ошибка: не удалось определить метод запуска библиотеки!');
+try {
+  // Корректный запуск для версии 1.5.8 через конструктор new
+  const activeBridge = new MinimedBridge(config);
+  console.log('Мост успешно инициализирован и запущен.');
+} catch (error) {
+  console.error('Критическая ошибка при инициализации моста:', error.message);
 }
