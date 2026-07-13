@@ -6,9 +6,9 @@
   "scripts": {
     "start": "node index.js"
   },
-    "dependencies": {
+  "dependencies": {
     "nightscout-connect-carelink": "^1.0.0",
     "axios": "^1.7.2",
     "express": "^4.19.2"
   }
-
+}
