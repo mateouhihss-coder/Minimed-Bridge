@@ -1,10 +1,6 @@
 {
-  "name": "medtronic-uploader",
+  "name": "minimed-connect-to-nightscout",
   "version": "1.0.0",
-  "main": "index.js",
-  "scripts": {
-    "start": "node index.js"
-  },
   "dependencies": {
     "minimed-connect-to-nightscout": "latest"
   }
