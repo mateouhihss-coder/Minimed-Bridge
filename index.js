@@ -22,45 +22,43 @@ const config = {
   secret: process.env.API_SECRET
 };
 
-console.log("[Мост] Включение глубокой диагностики структуры данных...");
+console.log("[Мост] Инициализация двухэтапного конвейера CareLink...");
 
-const fetchCarelink = typeof bridge.carelink === 'function' ? bridge.carelink : (bridge.carelink.fetch || bridge.carelink.getHistory || Object.values(bridge.carelink).find(f => typeof f === 'function'));
+const initCarelink = typeof bridge.carelink === 'function' ? bridge.carelink : bridge.carelink.init;
+const uploadNightscout = typeof bridge.nightscout === 'function' ? bridge.nightscout : (bridge.nightscout.upload || bridge.nightscout.send || Object.values(bridge.nightscout).find(f => typeof f === 'function'));
 
 async function syncData() {
-  console.log(`[${new Date().toISOString()}] ==> Старт ручной синхронизации...`);
+  console.log(`[${new Date().toISOString()}] ==> Старт синхронизации...`);
   try {
-    console.log("[Мост] Шаг 1: Запрос к CareLink...");
-    let rawData = await fetchCarelink(config);
+    console.log("[Мост] Шаг 1А: Инициализация клиента CareLink...");
+    const client = await initCarelink(config);
+    
+    console.log("[Мост] Шаг 1Б: Получение реальных данных о сахарах...");
+    // Вот тут мы вызываем настоящий fetch, полученный от клиента
+    const rawData = await client.fetch();
     
     if (!rawData) {
-      console.log("[Мост] CareLink вернул пустой ответ.");
+      console.log("[Мост] От CareLink получен пустой ответ.");
       return;
     }
 
-    // ВЫВОД СТРУКТУРЫ ДЛЯ АНАЛИЗА
-    console.log("[Диагностика] Тип данных CareLink:", typeof rawData);
-    console.log("[Диагностика] Ключи корневого объекта:", Object.keys(rawData));
-    
-    // Если это массив объектов, посмотрим на первый элемент
-    if (Array.isArray(rawData) && rawData.length > 0) {
-      console.log("[Диагностика] Пример элемента массива:", JSON.stringify(rawData[0]).substring(0, 500));
-    } else {
-      // Если это объект, посмотрим на первые 500 символов его свойств (например, sgs или подобных)
-      for (const key of Object.keys(rawData).slice(0, 3)) {
-        console.log(`[Диагностика] Свойство [${key}]:`, JSON.stringify(rawData[key]).substring(0, 300));
-      }
-    }
-
-    console.log("[Мост] Пробуем выполнить Шаг 2...");
+    console.log("[Мост] Шаг 2: Трансформация данных...");
     const transformedData = bridge.transform(rawData);
-    console.log("[Мост] Успешная трансформация!");
+    const filteredData = bridge.filter ? bridge.filter(transformedData) : transformedData;
+
+    console.log("[Мост] Шаг 3: Отправка в Nightscout...");
+    await uploadNightscout(filteredData, config);
+    
+    console.log("[Успех 🎉] Данные сахара успешно доставлены в Nightscout!");
 
   } catch (error) {
     console.error("[Ошибка конвейера]:", error.message || error);
   }
 }
 
-if (fetchCarelink) {
+if (initCarelink && uploadNightscout) {
   syncData();
-  setInterval(syncData, 300000);
+  setInterval(syncData, 300000); // Каждые 5 минут
+} else {
+  console.error("[Критическая ошибка] Не удалось настроить функции моста.");
 }
