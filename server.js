@@ -1,18 +1,27 @@
 const http = require('http');
 
-// ХАК: Перехватываем стандартный системный класс URL в Node.js.
-// Когда старая библиотека CareLink попробует создать поломанную или пустую ссылку,
-// мы поймаем этот момент и подставим рабочий адрес CareLink EU.
+// Улучшенный хак-перехватчик системного класса URL.
+// Теперь мы берем относительные ссылки авторизации, которые генерирует библиотека (начинающиеся с /u/login),
+// и принудительно отправляем их на актуальный рабочий сервер авторизации Medtronic CareLink.
 const OriginalURL = global.URL;
 global.URL = function(url, base) {
   try {
-    // Если ссылка пустая или ломает парсер, подменяем на рабочий домен
-    if (!url || url === 'undefined' || url.includes('undefined')) {
-      url = 'https://carelink.minimed.eu/users/connect/token';
+    if (typeof url === 'string') {
+      // Если библиотека пытается ломиться на несуществующий адрес авторизации
+      if (url.startsWith('/u/login') || url.includes('universal-login')) {
+        return new OriginalURL(url, 'https://customer.medtronic.com');
+      }
+      // Если ссылка сломана или пустая
+      if (url === 'undefined' || url.includes('undefined')) {
+        url = 'https://carelink.minimed.eu/users/connect/token';
+      }
     }
     return new OriginalURL(url, base);
   } catch (e) {
-    console.log(`[Фикс URL] Исправлена неверная ссылка: "${url}"`);
+    // В случае любого сбоя парсера направляем на правильный шлюз авторизации
+    if (typeof url === 'string' && url.startsWith('/')) {
+      return new OriginalURL(url, 'https://customer.medtronic.com');
+    }
     return new OriginalURL('https://carelink.minimed.eu/users/connect/token', base);
   }
 };
@@ -67,11 +76,11 @@ function syncData() {
   });
 }
 
-// Старт
+// Старт моста
 syncData();
 setInterval(syncData, 5 * 60 * 1000);
 
-// Технический веб-сервер
+// Технический веб-сервер для удержания Render в онлайне
 const port = process.env.PORT || 10000;
 const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
