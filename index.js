@@ -22,23 +22,29 @@ const config = {
   secret: process.env.API_SECRET
 };
 
-console.log("[Мост] Инициализация двухэтапного конвейера CareLink...");
+console.log("[Мост] Попытка корректного вызова клиента...");
 
-const initCarelink = typeof bridge.carelink === 'function' ? bridge.carelink : bridge.carelink.init;
+// Находим базовые методы (мы точно знаем, что они имеют тип 'function')
+const clientFactory = typeof bridge.carelink === 'function' ? bridge.carelink : Object.values(bridge.carelink).find(f => typeof f === 'function');
 const uploadNightscout = typeof bridge.nightscout === 'function' ? bridge.nightscout : (bridge.nightscout.upload || bridge.nightscout.send || Object.values(bridge.nightscout).find(f => typeof f === 'function'));
 
 async function syncData() {
   console.log(`[${new Date().toISOString()}] ==> Старт синхронизации...`);
   try {
-    console.log("[Мост] Шаг 1А: Инициализация клиента CareLink...");
-    const client = await initCarelink(config);
+    console.log("[Мост] Шаг 1А: Запуск фабрики CareLink...");
+    const client = await clientFactory(config);
     
-    console.log("[Мост] Шаг 1Б: Получение реальных данных о сахарах...");
-    // Вот тут мы вызываем настоящий fetch, полученный от клиента
-    const rawData = await client.fetch();
+    let rawData;
+    if (client && typeof client.fetch === 'function') {
+      console.log("[Мост] Шаг 1Б: Вызов метода client.fetch()...");
+      rawData = await client.fetch();
+    } else {
+      console.log("[Мост] Фабрика вернула объект без метода fetch, используем результат напрямую.");
+      rawData = client;
+    }
     
     if (!rawData) {
-      console.log("[Мост] От CareLink получен пустой ответ.");
+      console.log("[Мост] Ответ от CareLink пуст.");
       return;
     }
 
@@ -56,9 +62,9 @@ async function syncData() {
   }
 }
 
-if (initCarelink && uploadNightscout) {
+if (clientFactory && uploadNightscout) {
   syncData();
   setInterval(syncData, 300000); // Каждые 5 минут
 } else {
-  console.error("[Критическая ошибка] Не удалось настроить функции моста.");
+  console.error("[Критическая ошибка] Опять не удалось обнаружить функции библиотеки.");
 }
