@@ -22,7 +22,7 @@ const config = {
   secret: process.env.API_SECRET
 };
 
-console.log("[Мост] Адаптация старого колбэк-метода fetch...");
+console.log("[Мост] Инициализация системы обхода 404 URL...");
 
 const clientFactory = typeof bridge.carelink === 'function' ? bridge.carelink : Object.values(bridge.carelink).find(f => typeof f === 'function');
 const uploadNightscout = typeof bridge.nightscout === 'function' ? bridge.nightscout : (bridge.nightscout.upload || bridge.nightscout.send || Object.values(bridge.nightscout).find(f => typeof f === 'function'));
@@ -33,11 +33,26 @@ async function syncData() {
     console.log("[Мост] Шаг 1А: Инициализация клиента CareLink...");
     const client = await clientFactory(config);
     
+    // --- ДИАГНОСТИКА И КОРРЕКЦИЯ СТАРЫХ URL (Манкипатчинг) ---
+    if (client) {
+      // Ищем скрытые или внутренние настройки хоста в инстансе клиента
+      const hostKey = Object.keys(client).find(k => k.toLowerCase().includes('host') || k.toLowerCase().includes('url'));
+      if (hostKey) {
+        console.log(`[Диагностика URL] Обнаружен параметр ${hostKey}: ${client[hostKey]}`);
+      }
+      
+      // Патчим распространенную проблему старых версий для региона EU
+      if (client.host && client.host.includes('mfa.carelink.minimed.eu')) {
+        console.log("[Патч] Замена устаревшего хоста mfa.carelink на стандартный carelink.minimed.eu");
+        client.host = 'carelink.minimed.eu';
+      }
+    }
+    // --------------------------------------------------------
+
     let rawData;
     if (client && typeof client.fetch === 'function') {
       console.log("[Мост] Шаг 1Б: Запрос данных через колбэк...");
       
-      // Оборачиваем старый колбэк-стиль в современный Promise
       rawData = await new Promise((resolve, reject) => {
         client.fetch((err, data) => {
           if (err) return reject(err);
@@ -60,14 +75,12 @@ async function syncData() {
 
     console.log("[Мост] Шаг 3: Отправка в Nightscout...");
     
-    // Проверим, не требует ли метод nightscout тоже колбэк
     if (typeof uploadNightscout === 'function') {
       await new Promise((resolve, reject) => {
         const result = uploadNightscout(filteredData, config, (err) => {
           if (err) return reject(err);
           resolve();
         });
-        // Если метод вернул Promise сам, завершаем обертку
         if (result && typeof result.then === 'function') {
           result.then(resolve).catch(reject);
         }
@@ -78,6 +91,10 @@ async function syncData() {
 
   } catch (error) {
     console.error("[Ошибка конвейера]:", error.message || error);
+    if (error.stack) {
+      console.log("Подробный стек ошибки для анализа:");
+      console.log(error.stack);
+    }
   }
 }
 
