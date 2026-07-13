@@ -1,25 +1,28 @@
 const https = require('https');
 
-// Глубокий перехват всех HTTPS-запросов на уровне ядра Node.js
+// Перехватчик ядра: ловит и исправляет кривые ссылки CareLink
 const originalRequest = https.request;
 https.request = function(options, ...args) {
     const host = options.host || options.hostname || '';
-    const path = options.path || '';
+    let path = options.path || '';
     
-    console.log(`[ШПИОН ЯДРА] Попытка запроса: https://${host}${path}`);
+    // Если видим кривой URL авторизации с null — чиним его на лету
+    if (host.includes('carelink-login.minimed.eu') && path.includes('locale=null')) {
+        console.log(`[ПАТЧ] Пойман кривой URL: ${path}`);
+        
+        // Меняем null на правильные значения (en и PL)
+        path = path.replace('locale=null', 'locale=en')
+                   .replace('countrycode=null', 'countrycode=PL');
+                   
+        options.path = path;
+        console.log(`[ПАТЧ] Ссылка исправлена на: ${path}`);
+    }
     
     const req = originalRequest.call(this, options, ...args);
-    
-    req.on('response', (res) => {
-        if (res.statusCode === 404) {
-            console.error(`[ШПИОН ЯДРА - НАЙДЕНА 404] Точный URL: https://${host}${path}`);
-        }
-    });
-    
     return req;
 };
 
-// ... далее ваш обычный код (const carelink = require(...) и т.д.)
+// ... далее идет ваш обычный код инициализации (const express = require('express'); и т.д.)
 
 //
 
