@@ -1,4 +1,23 @@
 const http = require('http');
+
+// ХАК: Перехватываем стандартный системный класс URL в Node.js.
+// Когда старая библиотека CareLink попробует создать поломанную или пустую ссылку,
+// мы поймаем этот момент и подставим рабочий адрес CareLink EU.
+const OriginalURL = global.URL;
+global.URL = function(url, base) {
+  try {
+    // Если ссылка пустая или ломает парсер, подменяем на рабочий домен
+    if (!url || url === 'undefined' || url.includes('undefined')) {
+      url = 'https://carelink.minimed.eu/users/connect/token';
+    }
+    return new OriginalURL(url, base);
+  } catch (e) {
+    console.log(`[Фикс URL] Исправлена неверная ссылка: "${url}"`);
+    return new OriginalURL('https://carelink.minimed.eu/users/connect/token', base);
+  }
+};
+global.URL.prototype = OriginalURL.prototype;
+
 const minimed = require('minimed-connect-to-nightscout');
 
 const nsUrl = process.env.NS_URL || 
@@ -19,21 +38,7 @@ console.log('Запуск моста MiniMed -> Nightscout...');
 console.log('Регион CareLink:', config.server);
 console.log('Целевой Nightscout:', nsUrl);
 
-// Создаем подключение к CareLink
 const client = new minimed.carelink.Client(config);
-
-// Хак-исправление: принудительно прописываем актуальные базовые URL для CareLink EU,
-// чтобы старая библиотека не падала с ошибкой "Invalid URL"
-if (client.common && client.common.getSettings) {
-  const originalSettings = client.common.getSettings();
-  client.common.getSettings = function() {
-    return {
-      ...originalSettings,
-      bleDirectBaseUrl: 'https://carelink.minimed.eu',
-      b2cBaseUrl: 'https://carelink.minimed.eu/users/connect/token'
-    };
-  };
-}
 
 function syncData() {
   console.log(`[${new Date().toISOString()}] Делаем запрос в CareLink...`);
@@ -41,7 +46,6 @@ function syncData() {
   client.fetch(async (err, data) => {
     if (err) {
       console.error('Произошла ошибка при запросе из CareLink:', err.message || err);
-      if (err.stack) console.error('stack:', err.stack);
       return;
     }
 
@@ -63,15 +67,15 @@ function syncData() {
   });
 }
 
-// Запуск сразу и повтор каждые 5 минут
+// Старт
 syncData();
 setInterval(syncData, 5 * 60 * 1000);
 
-// Технический веб-сервер для Render
+// Технический веб-сервер
 const port = process.env.PORT || 10000;
 const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
-  res.end('Мост MiniMed работает в штатном режиме!\n');
+  res.end('Мост MiniMed работает!\n');
 });
 
 server.listen(port, () => {
