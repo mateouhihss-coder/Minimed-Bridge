@@ -1,6 +1,6 @@
 const { CareLinkClient } = require('nightscout-connect-carelink');
-
 const axios = require('axios');
+// ... дальше идет остальной ваш код настроек в кавычках
 
 // 1. НАСТРОЙКА ДОСТУПА (Заполните своими данными обязательно внутри кавычек!)
 const CARELINK_USERNAME = NIKITA_khali;
