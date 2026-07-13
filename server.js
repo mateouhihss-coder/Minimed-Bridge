@@ -22,35 +22,42 @@ console.log('Целевой Nightscout:', nsUrl);
 // Инициализируем клиент CareLink
 const carelinkClient = new minimed.carelink.Client(config);
 
-async function syncData() {
-  try {
-    console.log(`[${new Date().toISOString()}] Запрос данных из CareLink...`);
-    
-    // Используем правильный метод fetch для получения данных в версии 1.5.8
-    const data = await carelinkClient.fetch();
-    
-    if (!data || !data.sgs || data.sgs.length === 0) {
-      console.log('Новых сахаров в CareLink не обнаружено.');
+function syncData() {
+  console.log(`[${new Date().toISOString()}] Запрос данных из CareLink...`);
+  
+  // Передаем callback-функцию (err, data) как требует библиотека версии 1.5.8
+  carelinkClient.fetch(async (err, data) => {
+    if (err) {
+      console.error('Ошибка при запросе из CareLink:', err.message || err);
       return;
     }
 
-    console.log(`Получено сахаров: ${data.sgs.length}. Отправка в Nightscout...`);
+    try {
+      if (!data || !data.sgs || data.sgs.length === 0) {
+        console.log('Новых сахаров в CareLink не обнаружено.');
+        return;
+      }
 
-    // Форматируем и отправляем
-    const entries = minimed.transform(data);
-    await minimed.nightscout.upload(nsUrl, nsSecret, entries);
-    console.log('Данные успешно доставлены в Nightscout!');
+      console.log(`Получено сахаров: ${data.sgs.length}. Отправка в Nightscout...`);
 
-  } catch (error) {
-    console.error('Ошибка в работе моста:', error.message);
-  }
+      // Форматируем данные через трансформер
+      const entries = minimed.transform(data);
+
+      // Отправляем данные на ваш сайт Nightscout
+      await minimed.nightscout.upload(nsUrl, nsSecret, entries);
+      console.log('Данные успешно доставлены в Nightscout!');
+
+    } catch (error) {
+      console.error('Ошибка при обработке или отправке данных:', error.message);
+    }
+  });
 }
 
-// Запускаем опрос по таймеру
+// Запускаем первый опрос и ставим таймер на каждые 5 минут
 syncData();
 setInterval(syncData, 5 * 60 * 1000);
 
-// Заглушка веб-сервера, чтобы Render не ругался на отсутствие портов
+// Веб-сервер для стабильности Render
 const port = process.env.PORT || 10000;
 const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
