@@ -2,10 +2,10 @@ const express = require('express');
 const app = express();
 
 // 1. НАСТРОЙКИ (Заполните в кавычках)
-const CARELINK_USERNAME = "ВАШ_ЛОГИН";
-const CARELINK_PASSWORD = "ВАШ_ПАРОЛЬ";
+const CARELINK_USERNAME = "NIKITA_khali";
+const CARELINK_PASSWORD = "Dilutthdhgd_6767";
 const NIGHTSCOUT_URL = "https://huesosminimed.onrender.com"; 
-const NIGHTSCOUT_API_SECRET = "ВАШ_РЕАЛЬНЫЙ_API_SECRET";
+const NIGHTSCOUT_API_SECRET = "ALEKSEYNAVALNIY1487";
 
 async function syncData() {
   try {
