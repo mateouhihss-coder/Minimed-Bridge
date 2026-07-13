@@ -22,13 +22,26 @@ console.log('Целевой Nightscout:', nsUrl);
 // Создаем подключение к CareLink
 const client = new minimed.carelink.Client(config);
 
+// Хак-исправление: принудительно прописываем актуальные базовые URL для CareLink EU,
+// чтобы старая библиотека не падала с ошибкой "Invalid URL"
+if (client.common && client.common.getSettings) {
+  const originalSettings = client.common.getSettings();
+  client.common.getSettings = function() {
+    return {
+      ...originalSettings,
+      bleDirectBaseUrl: 'https://carelink.minimed.eu',
+      b2cBaseUrl: 'https://carelink.minimed.eu/users/connect/token'
+    };
+  };
+}
+
 function syncData() {
   console.log(`[${new Date().toISOString()}] Делаем запрос в CareLink...`);
   
-  // Вызываем fetch прямо у созданного клиента и передаем колбэк (err, data)
   client.fetch(async (err, data) => {
     if (err) {
       console.error('Произошла ошибка при запросе из CareLink:', err.message || err);
+      if (err.stack) console.error('stack:', err.stack);
       return;
     }
 
@@ -40,10 +53,7 @@ function syncData() {
 
       console.log('Данные из CareLink успешно получены! Отправляем в Nightscout...');
 
-      // Трансформируем данные в формат Nightscout
       const entries = minimed.transform(data);
-
-      // Отправляем на сайт
       await minimed.nightscout.upload(nsUrl, nsSecret, entries);
       console.log('Ура! Данные успешно доставлены на ваш Nightscout!');
 
