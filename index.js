@@ -1,4 +1,5 @@
-const { CareLinkClient } = require('@nightscout-connect/carelink');
+const { CareLinkClient } = require('nightscout-connect-carelink');
+
 const axios = require('axios');
 
 // 1. НАСТРОЙКА ДОСТУПА (Заполните своими данными обязательно внутри кавычек!)
