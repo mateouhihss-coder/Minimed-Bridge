@@ -1,12 +1,13 @@
 const { CareLinkClient } = require('@nightscout-connect/carelink');
 const axios = require('axios');
 
-// 1. НАСТРОЙКА ДОСТУПА (Заполните своими данными)
+// 1. НАСТРОЙКА ДОСТУПА (Заполните своими данными обязательно внутри кавычек!)
 const CARELINK_USERNAME = NIKITA_khali;
 const CARELINK_PASSWORD = Dilutthdhgd_6767;
 
-const NIGHTSCOUT_URL = "https://mateouhihss@gmail.com_NIGHTSCOUT.com"; 
-const NIGHTSCOUT_API_SECRET = https://huesosminimed.onrender.com;
+const NIGHTSCOUT_URL = "https://huesosminimed.onrender.com"; 
+const NIGHTSCOUT_API_SECRET = ALEKSEYNAVALNIY1487;
+
 // Регион для Польши/Европы оставляем 'EU'
 const client = new CareLinkClient({
   username: CARELINK_USERNAME,
