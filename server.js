@@ -1,8 +1,13 @@
 const bridge = require('minimed-connect-to-nightscout');
 
-// Пробуем разные варианты названий переменных, чтобы точно найти URL вашего Nightscout
-const nsUrl = process.env.NS_URL || process.env.NIGHTSCOUT_URL;
-const nsSecret = process.env.API_SECRET || process.env.NIGHTSCOUT_API_SECRET;
+// Пробуем все возможные варианты имени переменной для адреса Nightscout
+const nsUrl = process.env.NS_URL || 
+              process.env.NIGHTSCOUT_URL || 
+              process.env.NIGHTSCOUT_HOST || 
+              process.env.nightscout_Host;
+
+const nsSecret = process.env.API_SECRET || 
+                 process.env.NIGHTSCOUT_API_SECRET;
 
 const config = {
   carelink: {
@@ -21,7 +26,7 @@ console.log('Запуск моста MiniMed -> Nightscout...');
 console.log('Регион CareLink:', config.carelink.server);
 console.log('Целевой Nightscout:', config.nightscout.url);
 
-// Вызываем функцию напрямую, так как библиотека экспортирует именно её
+// Запуск библиотеки
 if (typeof bridge === 'function') {
   bridge(config);
 } else if (bridge && typeof bridge.start === 'function') {
