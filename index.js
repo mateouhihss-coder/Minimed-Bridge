@@ -1,15 +1,32 @@
-// Патч для принудительного исправления старых URL CareLink на актуальные (Keycloak)
 const axios = require('axios');
 
-const originalRequest = axios.prototype.request || axios.request;
-const patchUrl = (url) => {
-  if (typeof url === 'string') {
-    // Если библиотека ломится на старый европейский OAuth/Citrix, перенаправляем на Keycloak
-    if (url.includes('minimed.eu') && (url.includes('oauth') || url.includes('OAMWebServices') || url.includes('common/main'))) {
-      return 'https://carelink.minimed.eu/keycloak/auth/realms/carelink/protocol/openid-connect/auth';
+// Шпион для глобального axios
+axios.interceptors.request.use(req => {
+    console.log(`[HTTP ЗАПРОС] ${req.method.toUpperCase()} ${req.baseURL || ''}${req.url || ''}`);
+    return req;
+});
+axios.interceptors.response.use(res => res, err => {
+    if (err.config) {
+        console.error(`[HTTP ОШИБКА ${err.response?.status}] на URL: ${err.config.baseURL || ''}${err.config.url || ''}`);
     }
-  }
-  return url;
+    return Promise.reject(err);
+});
+
+// Шпион для изолированных инстансов axios.create()
+const originalCreate = axios.create;
+axios.create = function(config) {
+    const instance = originalCreate.call(this, config);
+    instance.interceptors.request.use(req => {
+        console.log(`[HTTP ЗАПРОС (create)] ${req.method.toUpperCase()} ${req.baseURL || ''}${req.url || ''}`);
+        return req;
+    });
+    instance.interceptors.response.use(res => res, err => {
+        if (err.config) {
+            console.error(`[HTTP ОШИБКА ${err.response?.status} (create)] на URL: ${err.config.baseURL || ''}${err.config.url || ''}`);
+        }
+        return Promise.reject(err);
+    });
+    return instance;
 };
 
 // Перехватываем все вызовы axios глобально
