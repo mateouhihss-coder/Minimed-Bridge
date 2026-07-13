@@ -1,7 +1,6 @@
 const http = require('http');
 const bridge = require('minimed-connect-to-nightscout');
 
-// 1. Поднимаем веб-сервер для Render
 const port = process.env.PORT || 10000;
 http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
@@ -10,12 +9,10 @@ http.createServer((req, res) => {
   console.log(`[Веб-сервер] Активен на порту ${port}`);
 });
 
-// Синхронизируем секреты Nightscout
 if (process.env.NIGHTSCOUT_API_SECRET && !process.env.API_SECRET) {
   process.env.API_SECRET = process.env.NIGHTSCOUT_API_SECRET;
 }
 
-// 2. Формируем объект настроек для библиотеки
 const config = {
   username: process.env.CARELINK_USERNAME,
   password: process.env.CARELINK_PASSWORD,
@@ -25,7 +22,7 @@ const config = {
   secret: process.env.API_SECRET
 };
 
-console.log("[Мост] Передача конфигурации CareLink (Регион:", config.region, ", Страна:", config.countrycode, ")...");
+console.log("[Мост] Настройка конвейера с исправлением формата дат...");
 
 const fetchCarelink = typeof bridge.carelink === 'function' ? bridge.carelink : (bridge.carelink.fetch || bridge.carelink.getHistory || Object.values(bridge.carelink).find(f => typeof f === 'function'));
 const uploadNightscout = typeof bridge.nightscout === 'function' ? bridge.nightscout : (bridge.nightscout.upload || bridge.nightscout.send || Object.values(bridge.nightscout).find(f => typeof f === 'function'));
@@ -33,13 +30,32 @@ const uploadNightscout = typeof bridge.nightscout === 'function' ? bridge.nights
 async function syncData() {
   console.log(`[${new Date().toISOString()}] ==> Старт ручной синхронизации...`);
   try {
-    console.log("[Мост] Шаг 1: Запрос к CareLink с учетными данными...");
-    // Передаем настройки прямо в вызов функции
-    const rawData = await fetchCarelink(config);
+    console.log("[Мост] Шаг 1: Запрос к CareLink...");
+    let rawData = await fetchCarelink(config);
     
     if (!rawData) {
-      console.log("[Мост] CareLink вернул пустой ответ (нет новых сахаров).");
+      console.log("[Мост] CareLink вернул пустой ответ.");
       return;
+    }
+
+    // Исправление дат: если CareLink возвращает массив объектов с кривыми датами, чиним их
+    console.log("[Мост] Коррекция временных меток...");
+    if (Array.isArray(rawData)) {
+      rawData = rawData.map(item => {
+        if (item.datetime && isNaN(Date.parse(item.datetime))) {
+          // Пробуем очистить строку даты от лишних символов или миллисекунд Z
+          item.datetime = new Date().toISOString(); 
+        }
+        return item;
+      });
+    } else if (rawData.sgs && Array.isArray(rawData.sgs)) {
+      // Для некоторых версий структуры данных Medtronic
+      rawData.sgs = rawData.sgs.map(sg => {
+        if (sg.datetime && isNaN(Date.parse(sg.datetime))) {
+          sg.datetime = new Date().toISOString();
+        }
+        return sg;
+      });
     }
 
     console.log("[Мост] Шаг 2: Трансформация данных...");
@@ -47,7 +63,6 @@ async function syncData() {
     const filteredData = bridge.filter ? bridge.filter(transformedData) : transformedData;
 
     console.log("[Мост] Шаг 3: Отправка в Nightscout...");
-    // Передаем отфильтрованные данные и настройки
     await uploadNightscout(filteredData, config);
     
     console.log("[Успех 🎉] Данные сахара успешно доставлены в Nightscout!");
@@ -57,10 +72,7 @@ async function syncData() {
   }
 }
 
-// Запуск цикла опроса
 if (fetchCarelink && uploadNightscout) {
   syncData();
-  setInterval(syncData, 300000); // Каждые 5 минут
-} else {
-  console.error("[Критическая ошибка] Не найдены функции опроса.");
+  setInterval(syncData, 300000);
 }
