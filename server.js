@@ -19,40 +19,45 @@ console.log('Запуск моста MiniMed -> Nightscout...');
 console.log('Регион CareLink:', config.server);
 console.log('Целевой Nightscout:', nsUrl);
 
-// Создаем прямое подключение к CareLink
+// Создаем подключение к CareLink
 const client = new minimed.carelink.Client(config);
 
-async function syncData() {
+function syncData() {
   console.log(`[${new Date().toISOString()}] Делаем запрос в CareLink...`);
   
-  try {
-    // Пробуем получить историю данных напрямую через встроенный метод клиента
-    const data = await client.getHistory(); 
-    
-    if (!data) {
-      console.log('CareLink вернул пустой ответ (нет данных).');
+  // Вызываем fetch прямо у созданного клиента и передаем колбэк (err, data)
+  client.fetch(async (err, data) => {
+    if (err) {
+      console.error('Произошла ошибка при запросе из CareLink:', err.message || err);
       return;
     }
 
-    console.log('Данные из CareLink успешно получены! Отправляем в Nightscout...');
+    try {
+      if (!data) {
+        console.log('CareLink вернул пустой ответ (нет данных).');
+        return;
+      }
 
-    // Превращаем данные помпы в формат для сайта Nightscout
-    const entries = minimed.transform(data);
+      console.log('Данные из CareLink успешно получены! Отправляем в Nightscout...');
 
-    // Загружаем сахара на сайт
-    await minimed.nightscout.upload(nsUrl, nsSecret, entries);
-    console.log('Ура! Данные успешно доставлены на ваш Nightscout!');
+      // Трансформируем данные в формат Nightscout
+      const entries = minimed.transform(data);
 
-  } catch (error) {
-    console.error('Произошла ошибка при обмене данными:', error.message || error);
-  }
+      // Отправляем на сайт
+      await minimed.nightscout.upload(nsUrl, nsSecret, entries);
+      console.log('Ура! Данные успешно доставлены на ваш Nightscout!');
+
+    } catch (error) {
+      console.error('Ошибка при обработке или отправке данных:', error.message);
+    }
+  });
 }
 
-// Запускаем проверку сразу при старте, а потом каждые 5 минут
+// Запуск сразу и повтор каждые 5 минут
 syncData();
 setInterval(syncData, 5 * 60 * 1000);
 
-// Хитрый веб-сервер, чтобы Render не ругался на порты и не отключал нас
+// Технический веб-сервер для Render
 const port = process.env.PORT || 10000;
 const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
