@@ -1,12 +1,4 @@
-const minimedModule = require('minimed-connect-to-nightscout');
-
-console.log('--- ДИАГНОСТИКА БИБЛИОТЕКИ ---');
-console.log('Тип экспорта:', typeof minimedModule);
-console.log('Содержимое:', minimedModule);
-if (minimedModule && typeof minimedModule === 'object') {
-  console.log('Доступные ключи:', Object.keys(minimedModule));
-}
-console.log('--------------------------------');
+const minimed = require('minimed-connect-to-nightscout');
 
 const nsUrl = process.env.NS_URL || 
               process.env.NIGHTSCOUT_URL || 
@@ -17,68 +9,46 @@ const nsSecret = process.env.API_SECRET ||
                  process.env.NIGHTSCOUT_API_SECRET;
 
 const config = {
-  carelink: {
-    username: process.env.CARELINK_USERNAME,
-    password: process.env.CARELINK_PASSWORD,
-    server: process.env.CARELINK_SERVER || 'EU'
-  },
-  nightscout: {
-    url: nsUrl,
-    secret: nsSecret
-  },
-  interval: 60000 // Проверка каждую минуту
+  username: process.env.CARELINK_USERNAME,
+  password: process.env.CARELINK_PASSWORD,
+  server: process.env.CARELINK_SERVER || 'EU'
 };
 
 console.log('Запуск моста MiniMed -> Nightscout...');
-console.log('Регион CareLink:', config.carelink.server);
-console.log('Целевой Nightscout:', config.nightscout.url);
+console.log('Регион CareLink:', config.server);
+console.log('Целевой Nightscout:', nsUrl);
 
-// Ищем функцию запуска во всех возможных местах экспорта
-let runFn = null;
+// Инициализируем клиенты CareLink и Nightscout из библиотеки
+const carelinkClient = new minimed.carelink.Client(config);
 
-if (typeof minimedModule === 'function') {
-  runFn = minimedModule;
-} else if (minimedModule && typeof minimedModule === 'object') {
-  if (typeof minimedModule.default === 'function') {
-    console.log('Найдена функция в .default');
-    runFn = minimedModule.default;
-  } else if (typeof minimedModule.Bridge === 'function') {
-    console.log('Найдена функция в .Bridge');
-    runFn = minimedModule.Bridge;
-  } else if (typeof minimedModule.bridge === 'function') {
-    console.log('Найдена функция в .bridge');
-    runFn = minimedModule.bridge;
-  } else {
-    // Если стандартные ключи не подошли, берем первую попавшуюся функцию из объекта
-    for (const key of Object.keys(minimedModule)) {
-      if (typeof minimedModule[key] === 'function') {
-        console.log(`Используем функцию из ключа: ${key}`);
-        runFn = minimedModule[key];
-        break;
-      }
-    }
-  }
-}
-
-// Запускаем найденную функцию
-if (runFn) {
+async function syncData() {
   try {
-    console.log('Пробуем запустить как конструктор (new)...');
-    new runFn(config);
-    console.log('Мост успешно инициализирован через "new".');
-  } catch (e) {
-    if (e.message.includes('is not a constructor') || e.message.includes('cannot be invoked without')) {
-      console.log('Объект не является конструктором. Пробуем вызов как обычной функции...');
-      try {
-        runFn(config);
-        console.log('Мост успешно запущен как функция.');
-      } catch (err) {
-        console.error('Ошибка при вызове функции моста:', err.message);
-      }
-    } else {
-      console.error('Ошибка при запуске моста:', e.message);
+    console.log(`[${new Date().toISOString()}] Запрос данных из CareLink...`);
+    
+    // Получаем последние данные от помпы
+    const data = await carelinkClient.getRecentData();
+    
+    if (!data || !data.sgs || data.sgs.length === 0) {
+      console.log('Новых сахаров в CareLink не обнаружено.');
+      return;
     }
+
+    console.log(`Получено сахаров: ${data.sgs.length}. Отправка в Nightscout...`);
+
+    // Форматируем данные для Nightscout через встроенный трансформатор библиотеки
+    const entries = minimed.transform(data);
+
+    // Отправляем данные на ваш сайт Nightscout
+    await minimed.nightscout.upload(nsUrl, nsSecret, entries);
+    console.log('Данные успешно доставлены в Nightscout!');
+
+  } catch (error) {
+    console.error('Ошибка в работе моста:', error.message);
   }
-} else {
-  console.error('Критическая ошибка: В импортированном модуле не найдено функций для запуска!');
 }
+
+// Первый запуск при старте
+syncData();
+
+// Повторяем процедуру каждые 5 минут
+setInterval(syncData, 5 * 60 * 1000);
